@@ -16,7 +16,7 @@ import zipfile
 from fastapi import UploadFile
 
 class FileExtractor:
-    def __init__(self, base_dir: Union[str, Path] = "files"):
+    def __init__(self, base_dir: Union[str, Path] = "files",prefix:str = ""):
         """
         初始化文件提取器
         
@@ -25,6 +25,7 @@ class FileExtractor:
         """
         self.base_dir = Path(base_dir)
         self.base_dir.mkdir(exist_ok=True)
+        self.prefix = prefix
     
     def extract(self, upload_file: UploadFile) -> Path:
         """
@@ -40,7 +41,7 @@ class FileExtractor:
             ValueError: 如果文件处理失败
         """
         # 创建唯一子目录
-        unique_dir = self.base_dir / str(uuid.uuid4())
+        unique_dir = self.base_dir / (self.prefix + "_" + str(uuid.uuid4()))
         unique_dir.mkdir()
         
         # 获取文件扩展名
@@ -77,7 +78,9 @@ class FileExtractor:
             if unique_dir.exists():
                 shutil.rmtree(unique_dir)
             raise ValueError(f"文件处理失败: {str(e)}")
-    
+    def get_file_list(self,extention:str) -> list:
+        #这里获取unique_dir下的所有文件
+        return list(self.unique_dir.glob(f'*{extention}'))
     def cleanup(self) -> None:
         """
         自动清理处理后的文件或目录
