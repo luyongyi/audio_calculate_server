@@ -162,6 +162,59 @@ def properties(signal, samplerate):
 #     if plot_histogram:
 #         histogram(signal)
 
+def find_peak(signal):
+    """找到信号的峰值点
+    
+    Args:
+        signal: 输入信号
+        
+    Returns:
+        peak_idx: 峰值点的索引
+    """
+    return np.argmax(np.abs(signal))
+
+def calculate_energy(signal, start_idx, end_idx):
+    """计算信号在指定范围内的能量
+    
+    Args:
+        signal: 输入信号
+        start_idx: 起始索引
+        end_idx: 结束索引
+        
+    Returns:
+        energy: 能量值
+    """
+    return np.sum(signal[start_idx:end_idx]**2)
+
+def calculate_C80(signal, sample_rate):
+    """计算C80值
+    
+    Args:
+        signal: 输入信号
+        sample_rate: 采样率
+        
+    Returns:
+        C80: C80值(dB)
+    """
+    # 找到峰值点
+    peak_idx = find_peak(signal)
+    
+    # 计算前80ms的能量
+    ms_to_samples = int(sample_rate * 0.001)  # 1ms对应的采样点数
+    early_start = max(0, peak_idx - 20 * ms_to_samples)
+    early_end = peak_idx + 60 * ms_to_samples
+    early_energy = calculate_energy(signal, early_start, early_end)
+    
+    # 计算后80ms的能量
+    late_start = peak_idx + 60 * ms_to_samples
+    late_end = peak_idx + 140 * ms_to_samples
+    late_energy = calculate_energy(signal, late_start, late_end)
+    
+    # 计算C80
+    C80 = 10 * np.log10(early_energy / late_energy)
+    
+    return C80
+
 if __name__ == '__main__':
     pass
     # import sys

@@ -1,4 +1,3 @@
-
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import FileResponse
 from utils.safe_extract import FileExtractor
@@ -42,6 +41,31 @@ async def get_RMS(files: UploadFile = File(...)):
             # 将结果写入CSV文件,并且仅保留两位小数
             #writer.writerow([file.name,total_RMS_L,total_RMS_R,A_weightRMS_L,A_weightRMS_R])
             writer.writerow([file.name,round(total_RMS_L,2),round(total_RMS_R,2),round(A_weightRMS_L,2),round(A_weightRMS_R,2)])
+        
+    return FileResponse(path=csvName,filename='audio_param.csv')
+
+@router.post("/C80")
+async def get_C80(files: UploadFile = File(...)):
+    file_extractor = FileExtractor(prefix="C80")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    csvHeader=['filename','C80_L','C80_R']
+    csvName = f'{file_path}/audio_param.csv'
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        for file in file_list:
+            data, samplerate = sf.read(file)
+            #这里要判断data是单声道还是立体声
+            if data.ndim == 1:
+                C80_L = wave_analyzer.calculate_C80(data, samplerate)
+                C80_R = "/"
+            else:
+                C80_L = wave_analyzer.calculate_C80(data[:,0], samplerate)
+                C80_R = wave_analyzer.calculate_C80(data[:,1], samplerate)
+            
+            # 将结果写入CSV文件,并且仅保留两位小数
+            writer.writerow([file.name, round(C80_L,2), round(C80_R,2)])
         
     return FileResponse(path=csvName,filename='audio_param.csv')
 
