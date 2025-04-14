@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频相关性分析工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1rem;
+        }
+        .card-header.cross {
+            background-color: #007bff;
+        }
+        .card-header.cut {
+            background-color: #28a745;
+        }
+        .upload-area {
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        .file-name {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 5px;
+            display: none;
+        }
+        .upload-area.cross {
+            border: 2px dashed #007bff;
+        }
+        .upload-area.cut {
+            border: 2px dashed #28a745;
+        }
+        .upload-area:hover {
+            background-color: #e9ecef;
+        }
+        .upload-area.dragover {
+            background-color: #e9ecef;
+            border-style: solid;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .result-image {
+            max-width: 100%;
+            height: auto;
+            margin-top: 1rem;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        .form-control {
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- 互相关分析部分 -->
+        <div class="card">
+            <div class="card-header cross">
+                <h3 class="mb-0">音频互相关分析工具</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="upload-area cross" id="uploadAreaCross1">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放被裁剪音频</h4>
+                            <p class="text-muted">支持WAV格式文件</p>
+                            <div class="file-name" id="fileNameCross1"></div>
+                            <input type="file" id="fileInputCross1" class="d-none" accept=".wav">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="upload-area cross" id="uploadAreaCross2">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放裁剪参考文件</h4>
+                            <p class="text-muted">支持WAV格式文件</p>
+                            <div class="file-name" id="fileNameCross2"></div>
+                            <input type="file" id="fileInputCross2" class="d-none" accept=".wav">
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="loading" id="loadingCross">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在分析音频文件，请稍候...</p>
+                </div>
+
+                <div class="results mt-4" id="resultsCross" style="display: none;">
+                    <h4 class="mb-3">互相关分析结果</h4>
+                    <div class="text-center">
+                        <img id="resultImage" class="result-image" src="" alt="互相关分析结果">
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 相关性裁剪部分 -->
+        <div class="card">
+            <div class="card-header cut">
+                <h3 class="mb-0">音频相关性裁剪工具</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="upload-area cut" id="uploadAreaCut1">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放待处理音频</h4>
+                            <p class="text-muted">支持WAV格式文件或ZIP压缩包</p>
+                            <div class="file-name" id="fileNameCut1"></div>
+                            <input type="file" id="fileInputCut1" class="d-none" accept=".wav,.zip">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="upload-area cut" id="uploadAreaCut2">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放参考音频</h4>
+                            <p class="text-muted">支持WAV格式文件</p>
+                            <div class="file-name" id="fileNameCut2"></div>
+                            <input type="file" id="fileInputCut2" class="d-none" accept=".wav">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6 offset-md-3">
+                        <div class="form-group">
+                            <label for="correlationThreshold">相关性阈值</label>
+                            <input type="number" class="form-control" id="correlationThreshold" value="100" min="0" step="0.1">
+                            <small class="form-text text-muted">设置相关性阈值，大于此值的部分将被裁剪</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="loading" id="loadingCut">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在处理音频文件，请稍候...</p>
+                </div>
+
+                <div class="results mt-4" id="resultsCut" style="display: none;">
+                    <h4 class="mb-3">处理结果</h4>
+                    <div class="text-center">
+                        <a id="downloadLink" class="btn btn-success" download>
+                            <i class="bi bi-download"></i> 下载裁剪后的音频
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 互相关分析部分
+            const uploadAreaCross1 = document.getElementById('uploadAreaCross1');
+            const uploadAreaCross2 = document.getElementById('uploadAreaCross2');
+            const fileInputCross1 = document.getElementById('fileInputCross1');
+            const fileInputCross2 = document.getElementById('fileInputCross2');
+            const loadingCross = document.getElementById('loadingCross');
+            const resultsCross = document.getElementById('resultsCross');
+            const resultImage = document.getElementById('resultImage');
+            let fileCross1 = null;
+            let fileCross2 = null;
+
+            // 相关性裁剪部分
+            const uploadAreaCut1 = document.getElementById('uploadAreaCut1');
+            const uploadAreaCut2 = document.getElementById('uploadAreaCut2');
+            const fileInputCut1 = document.getElementById('fileInputCut1');
+            const fileInputCut2 = document.getElementById('fileInputCut2');
+            const loadingCut = document.getElementById('loadingCut');
+            const resultsCut = document.getElementById('resultsCut');
+            const downloadLink = document.getElementById('downloadLink');
+            const correlationThreshold = document.getElementById('correlationThreshold');
+            let fileCut1 = null;
+            let fileCut2 = null;
+
+            // 设置拖放和点击事件处理函数
+            function setupUploadArea(area, input) {
+                const fileNameDisplay = document.getElementById(`fileName${input.id.replace('fileInput', '')}`);
+                
+                area.addEventListener('click', () => input.click());
+                
+                area.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    area.classList.add('dragover');
+                });
+
+                area.addEventListener('dragleave', () => {
+                    area.classList.remove('dragover');
+                });
+
+                area.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    area.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        input.files = e.dataTransfer.files;
+                        fileNameDisplay.textContent = e.dataTransfer.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+
+                input.addEventListener('change', () => {
+                    if (input.files.length > 0) {
+                        fileNameDisplay.textContent = input.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+            }
+
+            // 设置互相关分析部分的上传区域
+            setupUploadArea(uploadAreaCross1, fileInputCross1);
+            setupUploadArea(uploadAreaCross2, fileInputCross2);
+
+            // 设置相关性裁剪部分的上传区域
+            setupUploadArea(uploadAreaCut1, fileInputCut1);
+            setupUploadArea(uploadAreaCut2, fileInputCut2);
+
+            function handleFileChange(input) {
+                if (input.id.includes('Cross')) {
+                    if (input === fileInputCross1) {
+                        fileCross1 = input.files[0];
+                    } else {
+                        fileCross2 = input.files[0];
+                    }
+                    
+                    if (fileCross1 && fileCross2) {
+                        analyzeFiles();
+                    }
+                } else {
+                    if (input === fileInputCut1) {
+                        fileCut1 = input.files[0];
+                    } else {
+                        fileCut2 = input.files[0];
+                    }
+                    
+                    if (fileCut1 && fileCut2) {
+                        processFiles();
+                    }
+                }
+            }
+
+            // 互相关分析部分的事件监听
+            fileInputCross1.addEventListener('change', () => handleFileChange(fileInputCross1));
+            fileInputCross2.addEventListener('change', () => handleFileChange(fileInputCross2));
+
+            // 相关性裁剪部分的事件监听
+            fileInputCut1.addEventListener('change', () => handleFileChange(fileInputCut1));
+            fileInputCut2.addEventListener('change', () => handleFileChange(fileInputCut2));
+
+            function analyzeFiles() {
+                const formData = new FormData();
+                formData.append('files', fileCross1);
+                formData.append('filesRef', fileCross2);
+
+                loadingCross.style.display = 'block';
+                resultsCross.style.display = 'none';
+
+                fetch('/audio_files_deal/cross_correlation', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器响应错误');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const imageUrl = URL.createObjectURL(blob);
+                    resultImage.src = imageUrl;
+                    loadingCross.style.display = 'none';
+                    resultsCross.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loadingCross.style.display = 'none';
+                    alert('处理文件时发生错误：' + error.message);
+                });
+            }
+
+            function processFiles() {
+                const formData = new FormData();
+                formData.append('files', fileCut1);
+                formData.append('filesRef', fileCut2);
+
+                loadingCut.style.display = 'block';
+                resultsCut.style.display = 'none';
+
+                fetch(`/audio_files_deal/correlation_cut?max_correlation=${correlationThreshold.value}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器响应错误');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    downloadLink.href = url;
+                    downloadLink.download = 'cut_audio.zip';
+                    loadingCut.style.display = 'none';
+                    resultsCut.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loadingCut.style.display = 'none';
+                    alert('处理文件时发生错误：' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html>
