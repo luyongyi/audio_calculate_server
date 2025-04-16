@@ -5,6 +5,8 @@ import utils.waveform_analysis.wave_analyzer  as wave_analyzer
 import soundfile as sf
 import csv
 import numpy as np
+from mosqito.sq_metrics import tnr_ecma_st
+from mosqito.utils import load
 router = APIRouter()
 
 @router.post("/RMS")
@@ -63,9 +65,44 @@ async def get_C80(files: UploadFile = File(...)):
             else:
                 C80_L = wave_analyzer.calculate_C80(data[:,0], samplerate)
                 C80_R = wave_analyzer.calculate_C80(data[:,1], samplerate)
+                C80_L = round(C80_L,2)
+                C80_R = round(C80_R,2)
             
             # 将结果写入CSV文件,并且仅保留两位小数
-            writer.writerow([file.name, round(C80_L,2), round(C80_R,2)])
+            writer.writerow([file.name, C80_L, C80_R])
         
     return FileResponse(path=csvName,filename='audio_param.csv')
 
+@router.post("/tonality")
+async def get_tonality(files: UploadFile = File(...),
+                       st_calib:float=94,
+                       dBSPL:float=-25):
+    file_extractor = FileExtractor(prefix="tonality")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    csvHeader=['filename','tonality_L','tonality_R']
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        for file in file_list:
+            # 使用 mosqito 的 load 方法加载音频文件
+            
+            data, samplerate = load(str(file), wav_calib=0.01)
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                # 单声道处理
+                t_tnr, tnr, prom, freq = tnr_ecma_st(data, samplerate, prominence=True)
+                tonality_L = t_tnr[0]
+                tonality_R = "/"
+            else:
+                # 立体声处理
+                t_tnr_L, tnr_L, prom_L, freq_L = tnr_ecma_st(data[:,0], samplerate, prominence=True)
+                t_tnr_R, tnr_R, prom_R, freq_R = tnr_ecma_st(data[:,1], samplerate, prominence=True)
+                tonality_L = t_tnr_L[0]
+                tonality_R = t_tnr_R[0]
+            
+            writer.writerow([file.name, tonality_L, tonality_R])
+        
+    return FileResponse(path=csvName, filename='audio_param.csv')

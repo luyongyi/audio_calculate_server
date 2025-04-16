@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频音调性分析工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background-color: #28a745;
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1rem;
+        }
+        .upload-area {
+            border: 2px dashed #28a745;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            position: relative;
+        }
+        .file-name {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 5px;
+            display: none;
+        }
+        .upload-area.dragover {
+            background-color: #e9ecef;
+            border-style: solid;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .form-control {
+            border-radius: 10px;
+        }
+        .results-table {
+            margin-top: 2rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">音频音调性分析工具</h3>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-12">
+                        <div class="upload-area" id="uploadArea">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放音频文件</h4>
+                            <p class="text-muted">支持WAV格式文件或ZIP压缩包</p>
+                            <div class="file-name" id="fileName"></div>
+                            <input type="file" id="fileInput" class="d-none" accept=".wav,.zip">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="stCalib">校准值 (dB)</label>
+                            <input type="number" class="form-control" id="stCalib" value="94" min="0" step="0.1">
+                            <small class="form-text text-muted">设置校准值，默认为94dB</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="form-group">
+                            <label for="dBSPL">声压级 (dB)</label>
+                            <input type="number" class="form-control" id="dBSPL" value="-25" step="0.1">
+                            <small class="form-text text-muted">设置声压级，默认为-25dB</small>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner-border text-success" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在分析音频文件，请稍候...</p>
+                </div>
+
+                <div class="results mt-4" id="results" style="display: none;">
+                    <h4 class="mb-3">分析结果</h4>
+                    <div class="table-responsive results-table">
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th>左声道音调性</th>
+                                    <th>右声道音调性</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="text-center mt-3">
+                        <a id="downloadLink" class="btn btn-success" download>
+                            <i class="bi bi-download"></i> 下载分析结果
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const resultsBody = document.getElementById('resultsBody');
+            const downloadLink = document.getElementById('downloadLink');
+            const stCalib = document.getElementById('stCalib');
+            const dBSPL = document.getElementById('dBSPL');
+            let file = null;
+
+            // 设置拖放和点击事件处理函数
+            function setupUploadArea(area, input) {
+                const fileNameDisplay = document.getElementById('fileName');
+                
+                area.addEventListener('click', () => input.click());
+                
+                area.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    area.classList.add('dragover');
+                });
+
+                area.addEventListener('dragleave', () => {
+                    area.classList.remove('dragover');
+                });
+
+                area.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    area.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        input.files = e.dataTransfer.files;
+                        fileNameDisplay.textContent = e.dataTransfer.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+
+                input.addEventListener('change', () => {
+                    if (input.files.length > 0) {
+                        fileNameDisplay.textContent = input.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+            }
+
+            setupUploadArea(uploadArea, fileInput);
+
+            function handleFileChange(input) {
+                file = input.files[0];
+                if (file) {
+                    processFile();
+                }
+            }
+
+            function processFile() {
+                const formData = new FormData();
+                formData.append('files', file);
+
+                loading.style.display = 'block';
+                results.style.display = 'none';
+
+                fetch(`/audio_param_calculate/tonality?st_calib=${stCalib.value}&dBSPL=${dBSPL.value}`, {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器响应错误');
+                    }
+                    return response.blob();
+                })
+                .then(blob => {
+                    const url = URL.createObjectURL(blob);
+                    downloadLink.href = url;
+                    downloadLink.download = 'tonality_results.csv';
+                    
+                    // 读取CSV文件内容并显示在表格中
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const csv = e.target.result;
+                        const rows = csv.split('\n');
+                        resultsBody.innerHTML = '';
+                        
+                        // 跳过表头，从第二行开始处理
+                        for (let i = 1; i < rows.length; i++) {
+                            if (rows[i].trim()) {
+                                const cells = rows[i].split(',');
+                                const row = document.createElement('tr');
+                                row.innerHTML = `
+                                    <td>${cells[0]}</td>
+                                    <td>${cells[1]}</td>
+                                    <td>${cells[2]}</td>
+                                `;
+                                resultsBody.appendChild(row);
+                            }
+                        }
+                    };
+                    reader.readAsText(blob);
+                    
+                    loading.style.display = 'none';
+                    results.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loading.style.display = 'none';
+                    alert('处理文件时发生错误：' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html> 
