@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 import api.audio_param_calculate as audio_param_calculate
 import api.audio_files_deal as audio_files_deal
+from fastapi.responses import FileResponse
+
 app = FastAPI(
     title="FastAPI Service",
     description="FastAPI服务",
@@ -23,7 +25,7 @@ app.add_middleware(
 
 @app.get("/")
 async def root():
-    return {"message": "Hello World"}
+    return FileResponse("static/index.html")
 
 if __name__ == "__main__":
     import uvicorn

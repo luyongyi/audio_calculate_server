@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>音频处理工具集</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Arial', sans-serif;
+            background-color: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+            padding: 2rem 0;
+            background-color: #fff;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        h1 {
+            color: #2c3e50;
+            font-size: 2.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .subtitle {
+            color: #7f8c8d;
+            font-size: 1.2rem;
+        }
+        
+        .tools-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+            margin-top: 2rem;
+        }
+        
+        .tool-card {
+            background-color: #fff;
+            border-radius: 8px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+        }
+        
+        .tool-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        }
+        
+        .tool-card h2 {
+            color: #3498db;
+            margin-bottom: 1rem;
+            font-size: 1.5rem;
+        }
+        
+        .tool-card p {
+            color: #7f8c8d;
+            margin-bottom: 1rem;
+        }
+        
+        .tool-icon {
+            font-size: 2rem;
+            margin-bottom: 1rem;
+            color: #3498db;
+        }
+        
+        footer {
+            text-align: center;
+            margin-top: 3rem;
+            padding: 2rem 0;
+            color: #7f8c8d;
+            font-size: 0.9rem;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>音频处理工具集</h1>
+            <p class="subtitle">专业的音频分析工具集合</p>
+        </div>
+    </header>
+    
+    <div class="container">
+        <div class="tools-grid">
+            <a href="/static/tonality.html" class="tool-card">
+                <div class="tool-icon">🎵</div>
+                <h2>音调分析</h2>
+                <p>分析音频的音调特征和调性</p>
+            </a>
+            
+            <a href="/static/c80.html" class="tool-card">
+                <div class="tool-icon">📊</div>
+                <h2>C80分析</h2>
+                <p>计算音频的C80清晰度指标</p>
+            </a>
+            
+            <a href="/static/correlation_cut.html" class="tool-card">
+                <div class="tool-icon">✂️</div>
+                <h2>相关性切割</h2>
+                <p>基于相关性的音频切割工具</p>
+            </a>
+            
+            <a href="/static/correlation_merge.html" class="tool-card">
+                <div class="tool-icon">🔄</div>
+                <h2>相关性合并</h2>
+                <p>基于相关性的音频合并工具</p>
+            </a>
+            
+            <a href="/static/cross_correlation.html" class="tool-card">
+                <div class="tool-icon">🔍</div>
+                <h2>互相关分析</h2>
+                <p>分析音频信号之间的互相关关系</p>
+            </a>
+            
+            <a href="/static/rms.html" class="tool-card">
+                <div class="tool-icon">📈</div>
+                <h2>RMS分析</h2>
+                <p>计算音频的均方根值</p>
+            </a>
+        </div>
+    </div>
+    
+    <footer>
+        <div class="container">
+            <p>© 2024 音频处理工具集 | 专业音频分析平台</p>
+        </div>
+    </footer>
+</body>
+</html> 
