@@ -7,6 +7,11 @@ import csv
 import numpy as np
 from mosqito.sq_metrics import tnr_ecma_st
 from mosqito.utils import load
+from scipy.signal import resample
+from mosqito.sq_metrics.loudness.loudness_zwst.loudness_zwst import loudness_zwst
+from mosqito.sq_metrics.roughness.roughness_ecma.roughness_ecma import roughness_ecma
+from mosqito.sq_metrics.sharpness.sharpness_din.sharpness_din_st import sharpness_din_st
+
 router = APIRouter()
 
 @router.post("/RMS")
@@ -77,6 +82,7 @@ async def get_C80(files: UploadFile = File(...)):
 async def get_tonality(files: UploadFile = File(...),
                        st_calib:float=94,
                        dBSPL:float=-25):
+    SPLin = wave_analyzer.db_to_linear(abs(st_calib)+abs(dBSPL))
     file_extractor = FileExtractor(prefix="tonality")
     file_path = file_extractor.extract(files)
     file_list = file_extractor.get_file_list('.wav')
@@ -89,7 +95,7 @@ async def get_tonality(files: UploadFile = File(...),
         for file in file_list:
             # 使用 mosqito 的 load 方法加载音频文件
             
-            data, samplerate = load(str(file), wav_calib=0.01)
+            data, samplerate = load(str(file), wav_calib=SPLin)
             # 判断单声道还是立体声
             if data.ndim == 1:
                 # 单声道处理
@@ -105,4 +111,190 @@ async def get_tonality(files: UploadFile = File(...),
             
             writer.writerow([file.name, tonality_L, tonality_R])
         
+    return FileResponse(path=csvName, filename='audio_param.csv')
+
+@router.post("/loudness")
+async def get_loudness(files: UploadFile = File(...),
+                       st_calib:float=94,
+                       dBSPL:float=-25,
+                       field_type: str = "free"):
+    """
+    计算音频文件的响度值
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的音频文件
+    st_calib: float
+        校准值，默认为94
+    dBSPL: float
+        SPL值，默认为-25
+    field_type: str
+        声场类型，可选"free"（自由场）或"diffuse"（扩散场），默认为"free"
+    
+    Returns:
+    --------
+    FileResponse
+        包含响度计算结果的CSV文件
+    """
+    SPLin = wave_analyzer.db_to_linear(abs(st_calib)+abs(dBSPL))
+    file_extractor = FileExtractor(prefix="loudness")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    
+    csvHeader = ['filename', 'loudness_L', 'loudness_R', 'field_type']
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        
+        for file in file_list:
+            data, samplerate = load(str(file), wav_calib=SPLin)
+            
+            # 确保采样率至少为48kHz
+            if samplerate < 48000:
+                data = resample(data, int(48000 * len(data) / samplerate))
+                samplerate = 48000
+            
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                # 单声道处理
+                N, N_specific, bark_axis = loudness_zwst(data, samplerate, field_type)
+                loudness_L = round(N, 2)
+                loudness_R = "/"
+            else:
+                # 立体声处理
+                N_L, N_specific_L, bark_axis_L = loudness_zwst(data[:,0], samplerate, field_type)
+                N_R, N_specific_R, bark_axis_R = loudness_zwst(data[:,1], samplerate, field_type)
+                loudness_L = round(N_L, 2)
+                loudness_R = round(N_R, 2)
+            
+            # 将结果写入CSV文件
+            writer.writerow([file.name, loudness_L, loudness_R, field_type])
+    
+    return FileResponse(path=csvName, filename='audio_param.csv')
+
+@router.post("/roughness")
+async def get_roughness(files: UploadFile = File(...),
+                       st_calib:float=94,
+                       dBSPL:float=-25):
+    """
+    计算音频文件的粗糙度值
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的音频文件
+    st_calib: float
+        校准值，默认为94
+    dBSPL: float
+        SPL值，默认为-25
+    
+    Returns:
+    --------
+    FileResponse
+        包含粗糙度计算结果的CSV文件
+    """
+    SPLin = wave_analyzer.db_to_linear(abs(st_calib)+abs(dBSPL))
+    file_extractor = FileExtractor(prefix="roughness")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    
+    csvHeader = ['filename', 'roughness_L', 'roughness_R']
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        
+        for file in file_list:
+            data, samplerate = load(str(file), wav_calib=SPLin)
+            
+            # 确保采样率至少为48kHz
+            if samplerate < 48000:
+                data = resample(data, int(48000 * len(data) / samplerate))
+                samplerate = 48000
+            
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                # 单声道处理
+                R, R_time, R_spec, bark_axis, t_50 = roughness_ecma(data, samplerate)
+                roughness_L = round(R, 2)
+                roughness_R = "/"
+            else:
+                # 立体声处理
+                R_L, R_time_L, R_spec_L, bark_axis_L, t_50_L = roughness_ecma(data[:,0], samplerate)
+                R_R, R_time_R, R_spec_R, bark_axis_R, t_50_R = roughness_ecma(data[:,1], samplerate)
+                roughness_L = round(R_L, 2)
+                roughness_R = round(R_R, 2)
+            
+            # 将结果写入CSV文件
+            writer.writerow([file.name, roughness_L, roughness_R])
+    
+    return FileResponse(path=csvName, filename='audio_param.csv')
+
+@router.post("/sharpness")
+async def get_sharpness(files: UploadFile = File(...),
+                       st_calib:float=94,
+                       dBSPL:float=-25,
+                       weighting: str = "din",
+                       field_type: str = "free"):
+    """
+    计算音频文件的锐度值
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的音频文件
+    st_calib: float
+        校准值，默认为94
+    dBSPL: float
+        SPL值，默认为-25
+    weighting: str
+        锐度计算方法，可选"din"、"aures"、"bismarck"、"fastl"，默认为"din"
+    field_type: str
+        声场类型，可选"free"（自由场）或"diffuse"（扩散场），默认为"free"
+    
+    Returns:
+    --------
+    FileResponse
+        包含锐度计算结果的CSV文件
+    """
+    SPLin = wave_analyzer.db_to_linear(abs(st_calib)+abs(dBSPL))
+    file_extractor = FileExtractor(prefix="sharpness")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    
+    csvHeader = ['filename', 'sharpness_L', 'sharpness_R', 'weighting', 'field_type']
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        
+        for file in file_list:
+            data, samplerate = load(str(file), wav_calib=SPLin)
+            
+            # 确保采样率至少为48kHz
+            if samplerate < 48000:
+                data = resample(data, int(48000 * len(data) / samplerate))
+                samplerate = 48000
+            
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                # 单声道处理
+                S = sharpness_din_st(data, samplerate, weighting=weighting, field_type=field_type)
+                sharpness_L = round(S, 2)
+                sharpness_R = "/"
+            else:
+                # 立体声处理
+                S_L = sharpness_din_st(data[:,0], samplerate, weighting=weighting, field_type=field_type)
+                S_R = sharpness_din_st(data[:,1], samplerate, weighting=weighting, field_type=field_type)
+                sharpness_L = round(S_L, 2)
+                sharpness_R = round(S_R, 2)
+            
+            # 将结果写入CSV文件
+            writer.writerow([file.name, sharpness_L, sharpness_R, weighting, field_type])
+    
     return FileResponse(path=csvName, filename='audio_param.csv')

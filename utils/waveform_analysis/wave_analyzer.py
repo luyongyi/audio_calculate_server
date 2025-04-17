@@ -214,6 +214,14 @@ def calculate_C80(signal, sample_rate):
     C80 = 10 * np.log10(early_energy / late_energy)
     
     return C80
+def db_to_linear(db_value):
+    """
+    将分贝值转换为线性值
+    :param db_value: 分贝值
+    :return: 线性值
+    """
+    return round(1000000000 * 0.00002 * (10 ** (db_value / 20))) / 1000000000
+
 
 if __name__ == '__main__':
     pass

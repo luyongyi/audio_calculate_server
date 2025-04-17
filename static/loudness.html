@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>响度计算工具</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .container {
+            max-width: 1200px;
+            margin-top: 2rem;
+        }
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1rem;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        .file-name {
+            margin-top: 1rem;
+            padding: 0.5rem;
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 5px;
+            display: none;
+        }
+        .upload-area.dragover {
+            background-color: #e9ecef;
+            border-style: solid;
+        }
+        .result-table {
+            width: 100%;
+            margin-top: 1rem;
+        }
+        .result-table th {
+            background-color: #f8f9fa;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .download-btn {
+            margin-top: 1rem;
+        }
+        .value-cell {
+            text-align: right;
+        }
+        .parameter-form {
+            margin-top: 1rem;
+            padding: 1rem;
+            background-color: #f8f9fa;
+            border-radius: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">响度计算工具</h3>
+            </div>
+            <div class="card-body">
+                <div class="parameter-form">
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="st_calib" class="form-label">校准值 (dB)</label>
+                                <input type="number" class="form-control" id="st_calib" value="94">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="dBSPL" class="form-label">SPL值 (dB)</label>
+                                <input type="number" class="form-control" id="dBSPL" value="-25">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="mb-3">
+                                <label for="field_type" class="form-label">声场类型</label>
+                                <select class="form-select" id="field_type">
+                                    <option value="free">自由场</option>
+                                    <option value="diffuse">扩散场</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="upload-area" id="uploadArea">
+                    <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                    <h4>拖放音频文件到这里或点击上传</h4>
+                    <p class="text-muted">支持WAV格式文件</p>
+                    <div class="file-name" id="fileName"></div>
+                    <input type="file" id="fileInput" class="d-none" accept=".wav" multiple>
+                </div>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在处理文件，请稍候...</p>
+                </div>
+
+                <div class="results mt-4" id="results" style="display: none;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h4 class="mb-0">计算结果</h4>
+                        <button class="btn btn-primary download-btn" id="downloadBtn">
+                            <i class="bi bi-download"></i> 下载CSV
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-striped result-table">
+                            <thead>
+                                <tr>
+                                    <th>文件名</th>
+                                    <th class="text-end">响度 (L)</th>
+                                    <th class="text-end">响度 (R)</th>
+                                    <th class="text-end">声场类型</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea = document.getElementById('uploadArea');
+            const fileInput = document.getElementById('fileInput');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('results');
+            const resultBody = document.getElementById('resultBody');
+            const downloadBtn = document.getElementById('downloadBtn');
+            let currentCsvData = null;
+
+            // 点击上传区域触发文件选择
+            uploadArea.addEventListener('click', () => fileInput.click());
+
+            // 拖放文件处理
+            uploadArea.addEventListener('dragover', (e) => {
+                e.preventDefault();
+                uploadArea.classList.add('dragover');
+            });
+
+            uploadArea.addEventListener('dragleave', () => {
+                uploadArea.classList.remove('dragover');
+            });
+
+            uploadArea.addEventListener('drop', (e) => {
+                e.preventDefault();
+                uploadArea.classList.remove('dragover');
+                const fileNameDisplay = document.getElementById('fileName');
+                if (e.dataTransfer.files.length > 0) {
+                    fileNameDisplay.textContent = e.dataTransfer.files.length + ' 个文件已选择';
+                    fileNameDisplay.style.display = 'block';
+                }
+                handleFiles(e.dataTransfer.files);
+            });
+
+            // 文件选择处理
+            fileInput.addEventListener('change', (e) => {
+                const fileNameDisplay = document.getElementById('fileName');
+                if (e.target.files.length > 0) {
+                    fileNameDisplay.textContent = e.target.files.length + ' 个文件已选择';
+                    fileNameDisplay.style.display = 'block';
+                }
+                handleFiles(e.target.files);
+            });
+
+            // 下载按钮点击处理
+            downloadBtn.addEventListener('click', () => {
+                if (currentCsvData) {
+                    const blob = new Blob([currentCsvData], { type: 'text/csv;charset=utf-8;' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'audio_param.csv';
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    document.body.removeChild(a);
+                }
+            });
+
+            function handleFiles(files) {
+                if (files.length === 0) return;
+
+                const formData = new FormData();
+                for (let i = 0; i < files.length; i++) {
+                    formData.append('files', files[i]);
+                }
+
+                // 添加参数
+                formData.append('st_calib', document.getElementById('st_calib').value);
+                formData.append('dBSPL', document.getElementById('dBSPL').value);
+                formData.append('field_type', document.getElementById('field_type').value);
+
+                // 显示加载动画
+                loading.style.display = 'block';
+                results.style.display = 'none';
+
+                // 发送文件到服务器
+                fetch('/audio_param_calculate/loudness', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('服务器响应错误');
+                    }
+                    return response.text();
+                })
+                .then(csvText => {
+                    // 保存CSV数据
+                    currentCsvData = csvText;
+                    
+                    // 解析CSV数据
+                    const rows = csvText.split('\n');
+                    resultBody.innerHTML = '';
+                    
+                    // 跳过标题行
+                    for (let i = 1; i < rows.length; i++) {
+                        if (rows[i].trim() === '') continue;
+                        
+                        const cells = rows[i].split(',');
+                        const row = document.createElement('tr');
+                        
+                        // 处理每个单元格
+                        cells.forEach((cell, index) => {
+                            const td = document.createElement('td');
+                            if (index > 0 && index < 3) { // 数值列右对齐
+                                td.className = 'text-end';
+                                // 尝试转换为数字并保留两位小数
+                                const num = parseFloat(cell);
+                                td.textContent = isNaN(num) ? cell : num.toFixed(2);
+                            } else {
+                                td.textContent = cell;
+                            }
+                            row.appendChild(td);
+                        });
+                        
+                        resultBody.appendChild(row);
+                    }
+
+                    // 隐藏加载动画，显示结果
+                    loading.style.display = 'none';
+                    results.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    loading.style.display = 'none';
+                    alert('处理文件时发生错误：' + error.message);
+                });
+            }
+        });
+    </script>
+</body>
+</html> 
