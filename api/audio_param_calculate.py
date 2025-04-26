@@ -4,6 +4,8 @@ from utils.safe_extract import FileExtractor
 import utils.waveform_analysis.wave_analyzer  as wave_analyzer
 import soundfile as sf
 import csv
+from utils.waveform_analysis.thd import THD
+
 import numpy as np
 from mosqito.sq_metrics import tnr_ecma_st
 from mosqito.utils import load
@@ -33,8 +35,8 @@ async def get_RMS(files: UploadFile = File(...)):
                 A_weightRMS_L = wave_analyzer.A_weight(data, samplerate)
                 A_weightRMS_L = wave_analyzer.dB(wave_analyzer.rms_flat(A_weightRMS_L))
                 
-                total_RMS_R = "/"
-                A_weightRMS_R = "/"
+                total_RMS_R = float('inf')
+                A_weightRMS_R = float('inf')
             else:
                 total_RMS_L = np.sqrt(np.mean(data[:,0]**2))
                 total_RMS_R = np.sqrt(np.mean(data[:,1]**2))
@@ -66,7 +68,7 @@ async def get_C80(files: UploadFile = File(...)):
             #这里要判断data是单声道还是立体声
             if data.ndim == 1:
                 C80_L = wave_analyzer.calculate_C80(data, samplerate)
-                C80_R = "/"
+                C80_R = float('inf')
             else:
                 C80_L = wave_analyzer.calculate_C80(data[:,0], samplerate)
                 C80_R = wave_analyzer.calculate_C80(data[:,1], samplerate)
@@ -101,7 +103,7 @@ async def get_tonality(files: UploadFile = File(...),
                 # 单声道处理
                 t_tnr, tnr, prom, freq = tnr_ecma_st(data, samplerate, prominence=True)
                 tonality_L = t_tnr[0]
-                tonality_R = "/"
+                tonality_R = float('inf')
             else:
                 # 立体声处理
                 t_tnr_L, tnr_L, prom_L, freq_L = tnr_ecma_st(data[:,0], samplerate, prominence=True)
@@ -162,7 +164,7 @@ async def get_loudness(files: UploadFile = File(...),
                 # 单声道处理
                 N, N_specific, bark_axis = loudness_zwst(data, samplerate, field_type)
                 loudness_L = round(N, 2)
-                loudness_R = "/"
+                loudness_R = float('inf')
             else:
                 # 立体声处理
                 N_L, N_specific_L, bark_axis_L = loudness_zwst(data[:,0], samplerate, field_type)
@@ -221,7 +223,7 @@ async def get_roughness(files: UploadFile = File(...),
                 # 单声道处理
                 R, R_time, R_spec, bark_axis, t_50 = roughness_ecma(data, samplerate)
                 roughness_L = round(R, 2)
-                roughness_R = "/"
+                roughness_R = float('inf')
             else:
                 # 立体声处理
                 R_L, R_time_L, R_spec_L, bark_axis_L, t_50_L = roughness_ecma(data[:,0], samplerate)
@@ -286,7 +288,7 @@ async def get_sharpness(files: UploadFile = File(...),
                 # 单声道处理
                 S = sharpness_din_st(data, samplerate, weighting=weighting, field_type=field_type)
                 sharpness_L = round(S, 2)
-                sharpness_R = "/"
+                sharpness_R = float('inf')
             else:
                 # 立体声处理
                 S_L = sharpness_din_st(data[:,0], samplerate, weighting=weighting, field_type=field_type)
@@ -296,5 +298,45 @@ async def get_sharpness(files: UploadFile = File(...),
             
             # 将结果写入CSV文件
             writer.writerow([file.name, sharpness_L, sharpness_R, weighting, field_type])
+    
+    return FileResponse(path=csvName, filename='audio_param.csv')
+
+@router.post("/THD")
+async def get_THD(files: UploadFile = File(...)):
+    """
+    计算音频文件的THD值
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的音频文件
+    
+    Returns:
+    --------
+    FileResponse
+        包含THD计算结果的CSV文件
+    """
+    file_extractor = FileExtractor(prefix="THD")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    csvHeader = ['filename', 'THD_L', 'THD_R']
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        
+        for file in file_list:
+            data, samplerate = sf.read(file)
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                THD_L = THD(data, samplerate)
+                THD_R = float('inf')
+            else:
+                THD_L = THD(data[:,0], samplerate)
+                THD_R = THD(data[:,1], samplerate)
+            
+            # 将结果写入CSV文件
+            writer.writerow([file.name, THD_L, THD_R])
     
     return FileResponse(path=csvName, filename='audio_param.csv')
