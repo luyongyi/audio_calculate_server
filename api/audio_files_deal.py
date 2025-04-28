@@ -91,10 +91,11 @@ async def correlation_cut(files: UploadFile = File(...),
                     continue
                 if corr[i] > corNum:
                     #取范围内0-0.2s最大值的索引
+                    INDEX_RANGE=int(0.2*samplerate)
                     count+=1
                     #print(f"cor[i]:{corr[i]}")
                     #print(f"corNum:{corNum}")
-                    max_index = np.argmax(corr[i:i+int(0.2*samplerate)])
+                    max_index = np.argmax(corr[i:i+INDEX_RANGE])
                     #裁剪音频
                     #print(f"max_index:{max_index}")
                     #print(f"maxValue:{corr[max_index]}")
