@@ -5,10 +5,13 @@ import utils.waveform_analysis.wave_analyzer  as wave_analyzer
 import soundfile as sf
 import csv
 import numpy as np
+from scipy import signal
 import matplotlib.pyplot as plt
 import os
 import zipfile
 import uuid
+import tempfile
+import shutil
 plt.switch_backend('Agg')
 router = APIRouter()
 
@@ -29,7 +32,7 @@ async def cross_correlation(files: UploadFile = File(...),
         if data_ref.ndim == 2:
             data_ref = data_ref[:, 0]
         #计算滑窗点积，也就是两个文件的互相关
-        corr = np.correlate(data, data_ref, mode='valid')
+        corr = signal.correlate(data, data_ref, mode='valid')
         #返回plot图,横坐标根据采样率计算，纵坐标显示相关系数
         plt.plot(corr)
         plt.xlabel('Time')
@@ -69,7 +72,7 @@ async def correlation_cut(files: UploadFile = File(...),
                 data = data[:, 0]
             #计算相关系数
             #print(f"len(data)/samplerate:{len(data)/samplerate}")
-            corr = np.correlate(data, data_ref, mode='valid')   
+            corr = signal.correlate(data, data_ref, mode='valid')   
             #plt.plot(corr)
             #plt.show()
             #遍历寻找相关系数大于max_correlation的点，如果有，则取范围内0-0.2s最大值的索引
@@ -110,3 +113,90 @@ async def correlation_cut(files: UploadFile = File(...),
                     for file in files:
                         zipf.write(os.path.join(root, file), os.path.join(root, file))
             return FileResponse(path=f"{file_path}/cut_audio.zip",filename='cut_audio.zip')
+
+#响度均一化
+@router.post("/equalize_loudness")
+async def equalize_loudness(files: UploadFile = File(...),
+                            weighting: str = "Total_RMS"):
+    """
+    对音频文件进行响度均一化处理
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的zip文件，包含需要处理的音频文件
+    weighting: str
+        响度计算方式，可选"Total_RMS"或"A_weighting"，默认为"Total_RMS"
+    
+    Returns:
+    --------
+    FileResponse
+        处理后的zip文件
+    """
+    print(f"weighting:{weighting}")
+    # 使用FileExtractor处理文件
+    file_extractor = FileExtractor(prefix="loudness_equalize")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    
+    # 存储每个文件的响度值
+    loudness_values = []
+    
+    # 计算每个文件的响度
+    for file in file_list:
+        data, samplerate = sf.read(file)
+        
+        if weighting == "Total_RMS":
+            if data.ndim == 1:
+                loudness = wave_analyzer.dB(np.sqrt(np.mean(data**2)))
+            else:
+                # 对于立体声，取左右声道的平均值
+                loudness_L = wave_analyzer.dB(np.sqrt(np.mean(data[:,0]**2)))
+                loudness_R = wave_analyzer.dB(np.sqrt(np.mean(data[:,1]**2)))
+                loudness = (loudness_L + loudness_R) / 2
+        else:  # A_weighting
+            if data.ndim == 1:
+                A_weighted = wave_analyzer.A_weight(data, samplerate)
+                loudness = wave_analyzer.dB(wave_analyzer.rms_flat(A_weighted))
+            else:
+                A_weighted_L = wave_analyzer.A_weight(data[:,0], samplerate)
+                A_weighted_R = wave_analyzer.A_weight(data[:,1], samplerate)
+                loudness_L = wave_analyzer.dB(wave_analyzer.rms_flat(A_weighted_L))
+                loudness_R = wave_analyzer.dB(wave_analyzer.rms_flat(A_weighted_R))
+                loudness = (loudness_L + loudness_R) / 2
+        
+        loudness_values.append((file, loudness))
+    
+    # 找到最小响度值
+    min_loudness = min(loudness for _, loudness in loudness_values)
+    
+    # 创建输出目录
+    output_dir = os.path.join(file_path, "equalized")
+    os.makedirs(output_dir, exist_ok=True)
+    
+    # 调整每个文件的响度
+    for file, loudness in loudness_values:
+        data, samplerate = sf.read(file)
+        # 计算需要调整的增益
+        gain_db = min_loudness - loudness
+        gain_linear = wave_analyzer.db_to_linear_correct(gain_db)
+        print(f"file:{file}")
+        print(f"gain_db:{gain_db}")
+        print(f"gain_linear:{gain_linear}")
+        # 应用增益
+        adjusted_data = data * gain_linear
+        
+        # 保存调整后的文件
+        output_path = os.path.join(output_dir, os.path.basename(file))
+        sf.write(output_path, adjusted_data, samplerate)
+    
+    # 创建zip文件
+    zip_path = os.path.join(file_path, "equalized_files.zip")
+    with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+        for root, _, files in os.walk(output_dir):
+            for file in files:
+                file_path = os.path.join(root, file)
+                arcname = os.path.relpath(file_path, output_dir)
+                zipf.write(file_path, arcname)
+    
+    return FileResponse(path=zip_path, filename="equalized_files.zip")

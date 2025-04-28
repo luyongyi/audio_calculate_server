@@ -222,6 +222,13 @@ def db_to_linear(db_value):
     """
     return round(1000000000 * 0.00002 * (10 ** (db_value / 20))) / 1000000000
 
+def db_to_linear_correct(db_value):
+    """
+    将分贝值转换为线性值（标准实现）
+    :param db_value: 分贝值
+    :return: 线性值
+    """
+    return 10 ** (db_value / 20)
 
 if __name__ == '__main__':
     pass
