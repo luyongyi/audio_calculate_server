@@ -341,4 +341,58 @@ async def get_THD(files: UploadFile = File(...)):
     
     return FileResponse(path=csvName, filename='audio_param.csv')
 
-
+#计算1/3倍频程，返回csv
+@router.post("/octave_3")
+async def get_octave_3(files: UploadFile = File(...)):
+    """
+    计算音频文件的1/3倍频程
+    
+    Parameters:
+    -----------
+    files: UploadFile
+        上传的音频文件
+    
+    Returns:
+    --------
+    FileResponse
+        包含1/3倍频程计算结果的CSV文件
+    """
+    file_extractor = FileExtractor(prefix="octave_3")
+    file_path = file_extractor.extract(files)
+    file_list = file_extractor.get_file_list('.wav')
+    
+    # 定义1/3倍频程的中心频率
+    center_freqs = [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 6300, 8000, 10000, 12500, 16000, 20000]
+    
+    csvHeader = ['filename'] + [f'{freq}Hz' for freq in center_freqs]
+    csvName = f'{file_path}/audio_param.csv'
+    
+    with open(csvName, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(csvHeader)
+        
+        for file in file_list:
+            data, samplerate = sf.read(file)
+            
+            # 判断单声道还是立体声
+            if data.ndim == 1:
+                # 单声道处理
+                octave_3_values = wave_analyzer.calculate_octave_3(data, samplerate)
+                # 将RMS值转换为dB
+                octave_3_db = {freq: wave_analyzer.dB(val) for freq, val in octave_3_values.items()}
+                # 将结果写入CSV文件
+                row = [file.name] + [round(octave_3_db.get(freq, float('inf')), 2) for freq in center_freqs]
+            else:
+                # 立体声处理
+                octave_3_values_L = wave_analyzer.calculate_octave_3(data[:,0], samplerate)
+                octave_3_values_R = wave_analyzer.calculate_octave_3(data[:,1], samplerate)
+                # 将RMS值转换为dB
+                octave_3_db_L = {freq: wave_analyzer.dB(val) for freq, val in octave_3_values_L.items()}
+                octave_3_db_R = {freq: wave_analyzer.dB(val) for freq, val in octave_3_values_R.items()}
+                # 将结果写入CSV文件
+                row = [file.name] + [round(octave_3_db_L.get(freq, float('inf')), 2) for freq in center_freqs]
+            
+            writer.writerow(row)
+    
+    return FileResponse(path=csvName, filename='audio_param.csv')
+    

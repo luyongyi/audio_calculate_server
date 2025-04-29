@@ -4,6 +4,7 @@ import numpy as np
 from numpy import log10, pi, convolve, mean
 from scipy.signal.filter_design import bilinear
 from scipy.signal import lfilter
+from scipy.signal import butter
 #from scikits.audiolab import Sndfile, Format
 
 def A_weighting(Fs):
@@ -229,6 +230,59 @@ def db_to_linear_correct(db_value):
     :return: 线性值
     """
     return 10 ** (db_value / 20)
+
+def get_octave_bands():
+    """获取1/3倍频程的中心频率
+    
+    Returns:
+        list: 中心频率列表(Hz)
+    """
+    # 标准1/3倍频程中心频率(Hz)
+    return [20, 25, 31.5, 40, 50, 63, 80, 100, 125, 160, 200, 250, 315, 400, 
+            500, 630, 800, 1000, 1250, 1600, 2000, 2500, 3150, 4000, 5000, 
+            6300, 8000, 10000, 12500, 16000, 20000]
+
+def calculate_octave_3(data, samplerate):
+    """计算信号的1/3倍频程分析
+    
+    Args:
+        data: 输入信号
+        samplerate: 采样率
+        
+    Returns:
+        dict: 包含每个频段RMS值的字典，键为中心频率
+    """
+    # 获取中心频率列表
+    center_freqs = get_octave_bands()
+    results = {}
+    
+    for fc in center_freqs:
+        # 计算带通滤波器的上下截止频率
+        f1 = fc / (2 ** (1/6))  # 下截止频率
+        f2 = fc * (2 ** (1/6))  # 上截止频率
+        
+        # 设计带通滤波器
+        nyquist = samplerate / 2
+        low = f1 / nyquist
+        high = f2 / nyquist
+        
+        # 确保截止频率在有效范围内
+        if low >= 1 or high >= 1:
+            continue
+            
+        # 使用butterworth滤波器
+        b, a = butter(4, [low, high], btype='band')
+        
+        # 应用滤波器
+        filtered_data = lfilter(b, a, data)
+        
+        # 计算RMS值
+        rms_value = rms_flat(filtered_data)
+        
+        # 存储结果
+        results[fc] = rms_value
+    
+    return results
 
 if __name__ == '__main__':
     pass
