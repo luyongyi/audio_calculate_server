@@ -5,6 +5,7 @@ from numpy import log10, pi, convolve, mean
 from scipy.signal.filter_design import bilinear
 from scipy.signal import lfilter
 from scipy.signal import butter
+from scipy.signal import sosfilt
 #from scikits.audiolab import Sndfile, Format
 
 def A_weighting(Fs):
@@ -256,28 +257,31 @@ def calculate_octave_3(data, samplerate):
     center_freqs = get_octave_bands()
     results = {}
     
+    # 1/3 倍频程时，上下限系数 factor = 2^(±1/6)
+    factor = 2 ** (1/6)
+    nyquist = samplerate / 2.0
+    
     for fc in center_freqs:
         # 计算带通滤波器的上下截止频率
-        f1 = fc / (2 ** (1/6))  # 下截止频率
-        f2 = fc * (2 ** (1/6))  # 上截止频率
+        low = (fc / factor) / nyquist
+        high = (fc * factor) / nyquist
         
-        # 设计带通滤波器
-        nyquist = samplerate / 2
-        low = f1 / nyquist
-        high = f2 / nyquist
+        # 在可Nyquist范围内，且低频限不能小于0，高频限不能大于1
+        low = max(low, 1e-6)     # 避免低于0
+        high = min(high, 0.999) # 避免超过Nyquist
         
-        # 确保截止频率在有效范围内
-        if low >= 1 or high >= 1:
+        # 确保low < high
+        if low >= high:
             continue
-            
-        # 使用butterworth滤波器
-        b, a = butter(4, [low, high], btype='band')
+        
+        # 使用巴特沃斯带通滤波器
+        sos = butter(4, [low, high], btype='band', output='sos')
         
         # 应用滤波器
-        filtered_data = lfilter(b, a, data)
+        filtered = sosfilt(sos, data)
         
         # 计算RMS值
-        rms_value = rms_flat(filtered_data)
+        rms_value = rms_flat(filtered)
         
         # 存储结果
         results[fc] = rms_value
