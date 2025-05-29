@@ -5,6 +5,8 @@ import utils.waveform_analysis.wave_analyzer  as wave_analyzer
 import soundfile as sf
 import csv
 from utils.waveform_analysis.thd import THD
+from fastapi import HTTPException
+from utils.waveform_analysis.sdr import compute_SDR
 
 import numpy as np
 from mosqito.sq_metrics import tnr_ecma_st
@@ -395,4 +397,33 @@ async def get_octave_3(files: UploadFile = File(...)):
             writer.writerow(row)
     
     return FileResponse(path=csvName, filename='audio_param.csv')
+
+@router.post("/SDR")
+def get_SDR(files: UploadFile = File(...),
+            filesRef: UploadFile = File(...)):
+    """计算SDR（信号失真比）
     
+    Args:
+        files: 估计音频文件
+        filesRef: 参考音频文件
+        
+    Returns:
+        float: SDR值（dB）
+    """
+    try:
+        # 读取音频文件
+        audio1, sr1 = sf.read(filesRef.file)
+        audio2, sr2 = sf.read(files.file)
+        
+        # 确保采样率一致
+        if sr1 != sr2:
+            raise HTTPException(status_code=400, detail="采样率不一致")
+            
+        # 计算SDR
+        sdr = compute_SDR(audio2, audio1)
+        
+        return f"{sdr:.3f}"
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+        
