@@ -15,8 +15,10 @@ import shutil
 from utils.waveform_analysis.audio_comparison import (
     calculate_rms_difference, 
     plot_rms_difference,
-    AudioCompareParams
+    AudioCompareParams,
+    highpass_filter
 )
+from utils.waveform_analysis._common import load
 plt.switch_backend('Agg')
 router = APIRouter()
 
@@ -242,6 +244,15 @@ async def compareDiff(files: UploadFile = File(...),
         ref_path = os.path.join(ref_dir, "ref.wav")
         with open(ref_path, "wb") as f:
             f.write(await files.read())
+            
+        # 保存高通滤波后的参考文件
+        ref_data = load(ref_path)
+        ref_filtered = highpass_filter(ref_data['signal'], 
+                                     AudioCompareParams.HIGH_PASS_CUTOFF, 
+                                     ref_data['fs'],
+                                     AudioCompareParams.FILTER_ORDER)
+        ref_highpass_path = os.path.join(ref_dir, "ref_highpass.wav")
+        sf.write(ref_highpass_path, ref_filtered, ref_data['fs'])
         
         return JSONResponse(
             content={
@@ -274,9 +285,25 @@ async def compareDiff(files: UploadFile = File(...),
         
         # 保存待比较文件
         deg_dir = os.path.join(base_dir, compare_id)
-        deg_path = os.path.join(deg_dir, "deg.wav")
+        # 处理文件冲突
+        base_path = os.path.join(deg_dir, "deg")
+        counter = 1
+        deg_path = f"{base_path}.wav"
+        while os.path.exists(deg_path):
+            deg_path = f"{base_path}_{counter}.wav"
+            counter += 1
+            
         with open(deg_path, "wb") as f:
             f.write(await files.read())
+            
+        # 保存高通滤波后的待比较文件
+        deg_data = load(deg_path)
+        deg_filtered = highpass_filter(deg_data['signal'], 
+                                     AudioCompareParams.HIGH_PASS_CUTOFF, 
+                                     deg_data['fs'],
+                                     AudioCompareParams.FILTER_ORDER)
+        deg_highpass_path = os.path.splitext(deg_path)[0] + "_highpass.wav"
+        sf.write(deg_highpass_path, deg_filtered, deg_data['fs'])
         
         try:
             # 计算RMS差值

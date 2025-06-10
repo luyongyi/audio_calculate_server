@@ -2,18 +2,25 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import butter, filtfilt
 from utils.waveform_analysis._common import load
+from utils.waveform_analysis.wave_analyzer import dB
 import soundfile as sf
 import os
+import matplotlib as mpl
+
+# 设置中文字体
+plt.rcParams['font.sans-serif'] = ['WenQuanYi Zen Hei', 'WenQuanYi Micro Hei', 'sans-serif']  # 按优先级设置字体
+plt.rcParams['axes.unicode_minus'] = False  # 用来正常显示负号
+plt.rcParams['font.family'] = 'sans-serif'  # 设置字体族
 
 # 参数设置
 class AudioCompareParams:
     """音频比较参数设置"""
     # 高通滤波器参数
-    HIGH_PASS_CUTOFF = 200  # 高通滤波器截止频率（Hz）
+    HIGH_PASS_CUTOFF = 100  # 高通滤波器截止频率（Hz）
     FILTER_ORDER = 5       # 滤波器阶数
     
     # 滑窗参数
-    WINDOW_SIZE = 1024     # 窗大小（采样点数）
+    WINDOW_SIZE = 48000     # 窗大小（采样点数）
     OVERLAP = 0.5         # 重叠比例（0-1之间）
     HOP_SIZE = None       # 跳跃大小，根据WINDOW_SIZE和OVERLAP自动计算
     
@@ -70,7 +77,7 @@ def highpass_filter(data, cutoff, fs, order=5):
     return filtfilt(b, a, data)
 
 def calculate_windowed_rms(signal, window_size, hop_size):
-    """使用滑窗计算RMS值
+    """使用滑窗计算RMS值（dBFS格式）
     
     Args:
         signal: 输入信号
@@ -78,7 +85,7 @@ def calculate_windowed_rms(signal, window_size, hop_size):
         hop_size: 跳跃大小
         
     Returns:
-        rms_values: RMS值数组
+        rms_values: RMS值数组（dBFS）
         time_points: 对应的时间点
     """
     # 确保信号长度是窗大小的整数倍
@@ -89,7 +96,10 @@ def calculate_windowed_rms(signal, window_size, hop_size):
         start = i * hop_size
         end = start + window_size
         window = signal[start:end]
-        rms_values[i] = np.sqrt(np.mean(window**2))
+        # 计算线性RMS值
+        linear_rms = np.sqrt(np.mean(window**2))
+        # 转换为dBFS
+        rms_values[i] = dB(linear_rms)
     
     return rms_values
 
@@ -144,20 +154,17 @@ def calculate_rms_difference(ref_file, deg_file):
                                      deg_data['fs'],
                                      AudioCompareParams.FILTER_ORDER)
         
-        # 计算滑窗RMS
+        # 计算滑窗RMS（已经是dBFS格式）
         ref_rms = calculate_windowed_rms(ref_filtered, window_size, hop_size)
         deg_rms = calculate_windowed_rms(deg_filtered, window_size, hop_size)
         
-        # 计算RMS差值
+        # 计算RMS差值（dB）
         rms_diff = np.abs(ref_rms - deg_rms)
-        
-        # 计算dB值
-        max_diff_db = linear_to_db(np.max(rms_diff))
         
         result['mono'] = {
             'mean_diff': float(np.mean(rms_diff)),
             'max_diff': float(np.max(rms_diff)),
-            'max_diff_db': float(max_diff_db),
+            'max_diff_db': float(np.max(rms_diff)),  # 已经是dB格式
             'std_diff': float(np.std(rms_diff)),
             'rms_diff': rms_diff,
             'time_points': np.arange(len(rms_diff)) * hop_size / ref_data['fs']
@@ -185,19 +192,15 @@ def calculate_rms_difference(ref_file, deg_file):
                                   deg_data['fs'],
                                   AudioCompareParams.FILTER_ORDER)
         
-        # 计算滑窗RMS
+        # 计算滑窗RMS（已经是dBFS格式）
         ref_rms_left = calculate_windowed_rms(ref_left, window_size, hop_size)
         deg_rms_left = calculate_windowed_rms(deg_left, window_size, hop_size)
         ref_rms_right = calculate_windowed_rms(ref_right, window_size, hop_size)
         deg_rms_right = calculate_windowed_rms(deg_right, window_size, hop_size)
         
-        # 计算RMS差值
+        # 计算RMS差值（dB）
         rms_diff_left = np.abs(ref_rms_left - deg_rms_left)
         rms_diff_right = np.abs(ref_rms_right - deg_rms_right)
-        
-        # 计算dB值
-        max_diff_left_db = linear_to_db(np.max(rms_diff_left))
-        max_diff_right_db = linear_to_db(np.max(rms_diff_right))
         
         time_points = np.arange(len(rms_diff_left)) * hop_size / ref_data['fs']
         
@@ -205,7 +208,7 @@ def calculate_rms_difference(ref_file, deg_file):
             'left': {
                 'mean_diff': float(np.mean(rms_diff_left)),
                 'max_diff': float(np.max(rms_diff_left)),
-                'max_diff_db': float(max_diff_left_db),
+                'max_diff_db': float(np.max(rms_diff_left)),  # 已经是dB格式
                 'std_diff': float(np.std(rms_diff_left)),
                 'rms_diff': rms_diff_left,
                 'time_points': time_points
@@ -213,7 +216,7 @@ def calculate_rms_difference(ref_file, deg_file):
             'right': {
                 'mean_diff': float(np.mean(rms_diff_right)),
                 'max_diff': float(np.max(rms_diff_right)),
-                'max_diff_db': float(max_diff_right_db),
+                'max_diff_db': float(np.max(rms_diff_right)),  # 已经是dB格式
                 'std_diff': float(np.std(rms_diff_right)),
                 'rms_diff': rms_diff_right,
                 'time_points': time_points
@@ -241,23 +244,31 @@ def plot_rms_difference(rms_diff, fs, save_path=None, channel_type='mono'):
     if channel_type == 'mono':
         plt.plot(rms_diff['mono']['time_points'], 
                 rms_diff['mono']['rms_diff'], 
-                label='单声道')
+                label='Mono')
     else:
         plt.plot(rms_diff['stereo']['left']['time_points'], 
                 rms_diff['stereo']['left']['rms_diff'], 
-                label='左声道')
+                label='Left Channel')
         plt.plot(rms_diff['stereo']['right']['time_points'], 
                 rms_diff['stereo']['right']['rms_diff'], 
-                label='右声道')
+                label='Right Channel')
         plt.legend()
     
-    plt.xlabel('时间 (秒)')
-    plt.ylabel('RMS差值')
-    plt.title('音频RMS差值分析')
+    plt.xlabel('Time (s)')
+    plt.ylabel('RMS Difference (dB)')
+    plt.title('Audio RMS Difference Analysis')
     plt.grid(True)
     
     if save_path:
-        plt.savefig(save_path)
+        # 处理文件冲突
+        base_path, ext = os.path.splitext(save_path)
+        counter = 1
+        while os.path.exists(save_path):
+            save_path = f"{base_path}_{counter}{ext}"
+            counter += 1
+            
+        # 保存图片
+        plt.savefig(save_path, dpi=300, bbox_inches='tight')
         plt.close()
         return save_path
     else:
