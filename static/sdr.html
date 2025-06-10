@@ -1,189 +1,205 @@
 <!DOCTYPE html>
-<html lang="zh">
+<html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>SDR计算</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.7.2/font/bootstrap-icons.css" rel="stylesheet">
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
         body {
-            font-family: 'Arial', sans-serif;
-            background-color: #f5f5f5;
-            color: #333;
-            line-height: 1.6;
+            background-color: #f8f9fa;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
-        
         .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 2rem;
+            max-width: 1200px;
+            margin-top: 2rem;
         }
-        
-        header {
+        .card {
+            border-radius: 15px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+        .card-header {
+            background-color: #007bff;
+            color: white;
+            border-radius: 15px 15px 0 0 !important;
+            padding: 1rem;
+        }
+        .upload-area {
+            border: 2px dashed #007bff;
+            border-radius: 10px;
+            padding: 2rem;
             text-align: center;
-            margin-bottom: 2rem;
-            padding: 1rem 0;
-            background-color: #fff;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 1rem;
+            position: relative;
         }
-        
-        h1 {
-            color: #2c3e50;
-            font-size: 2rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .subtitle {
-            color: #7f8c8d;
-            font-size: 1.1rem;
-        }
-        
-        .upload-section {
-            background-color: #fff;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            margin-bottom: 2rem;
-        }
-        
-        .file-input-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .file-input-group label {
-            display: block;
-            margin-bottom: 0.5rem;
-            color: #2c3e50;
-            font-weight: bold;
-        }
-        
-        .file-input {
-            width: 100%;
+        .file-name {
+            margin-top: 1rem;
             padding: 0.5rem;
-            border: 2px dashed #3498db;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        
-        .button-group {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1.5rem;
-        }
-        
-        .button {
-            padding: 0.8rem 1.5rem;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 1rem;
-            transition: background-color 0.3s ease;
-        }
-        
-        .calculate-btn {
-            background-color: #3498db;
-            color: white;
-        }
-        
-        .calculate-btn:hover {
-            background-color: #2980b9;
-        }
-        
-        .confirm-btn {
-            background-color: #2ecc71;
-            color: white;
-        }
-        
-        .confirm-btn:hover {
-            background-color: #27ae60;
-        }
-        
-        .result-section {
-            background-color: #fff;
-            padding: 2rem;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            background-color: rgba(0, 0, 0, 0.05);
+            border-radius: 5px;
             display: none;
         }
-        
-        .result-section.active {
-            display: block;
+        .upload-area.dragover {
+            background-color: #e9ecef;
+            border-style: solid;
         }
-        
-        .result-value {
-            font-size: 1.5rem;
-            color: #2c3e50;
-            margin: 1rem 0;
+        .loading {
+            display: none;
             text-align: center;
+            margin: 2rem 0;
         }
-        
-        .back-link {
-            display: inline-block;
+        .spinner-border {
+            width: 3rem;
+            height: 3rem;
+        }
+        .result-section {
+            display: none;
             margin-top: 2rem;
-            color: #3498db;
-            text-decoration: none;
         }
-        
-        .back-link:hover {
-            text-decoration: underline;
+        .result-value {
+            font-size: 2rem;
+            color: #007bff;
+            text-align: center;
+            padding: 2rem;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
         }
     </style>
 </head>
 <body>
-    <header>
-        <div class="container">
-            <h1>SDR计算</h1>
-            <p class="subtitle">计算信号失真比（Signal-to-Distortion Ratio）</p>
-        </div>
-    </header>
-    
     <div class="container">
-        <div class="upload-section">
-            <div class="file-input-group">
-                <label for="reference">参考音频文件（.wav）</label>
-                <input type="file" id="reference" class="file-input" accept=".wav">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="mb-0">SDR计算</h3>
             </div>
-            
-            <div class="file-input-group">
-                <label for="estimated">估计音频文件（.wav）</label>
-                <input type="file" id="estimated" class="file-input" accept=".wav">
-            </div>
-            
-            <div class="button-group">
-                <button class="button calculate-btn" onclick="calculateSDR()">计算SDR</button>
-                <button class="button confirm-btn" onclick="confirmCalculation()" style="display: none;">确认结果</button>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="upload-area" id="uploadArea1">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放估计音频文件</h4>
+                            <p class="text-muted">支持WAV格式文件</p>
+                            <div class="file-name" id="fileName1"></div>
+                            <input type="file" id="fileInput1" class="d-none" accept=".wav">
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="upload-area" id="uploadArea2">
+                            <i class="bi bi-cloud-upload" style="font-size: 3rem;"></i>
+                            <h4>拖放参考音频文件</h4>
+                            <p class="text-muted">支持WAV格式文件</p>
+                            <div class="file-name" id="fileName2"></div>
+                            <input type="file" id="fileInput2" class="d-none" accept=".wav">
+                        </div>
+                    </div>
+                </div>
+
+                <div class="text-center mt-4">
+                    <button class="btn btn-primary btn-lg" onclick="calculateSDR()">计算SDR</button>
+                </div>
+                
+                <div class="loading" id="loading">
+                    <div class="spinner-border text-primary" role="status">
+                        <span class="visually-hidden">加载中...</span>
+                    </div>
+                    <p class="mt-2">正在计算SDR，请稍候...</p>
+                </div>
+
+                <div class="result-section" id="resultSection">
+                    <h4 class="mb-3">计算结果</h4>
+                    <div class="result-value" id="resultValue"></div>
+                    <div class="text-center mt-3">
+                        <button class="btn btn-success" onclick="confirmCalculation()">确认结果</button>
+                    </div>
+                </div>
             </div>
         </div>
-        
-        <div class="result-section" id="resultSection">
-            <h2>计算结果</h2>
-            <div class="result-value" id="resultValue"></div>
-        </div>
-        
-        <a href="/static/index.html" class="back-link">← 返回主页</a>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadArea1 = document.getElementById('uploadArea1');
+            const uploadArea2 = document.getElementById('uploadArea2');
+            const fileInput1 = document.getElementById('fileInput1');
+            const fileInput2 = document.getElementById('fileInput2');
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('resultSection');
+            let file1 = null;
+            let file2 = null;
+
+            function setupUploadArea(area, input) {
+                const fileNameDisplay = document.getElementById(`fileName${input.id.replace('fileInput', '')}`);
+                
+                area.addEventListener('click', () => input.click());
+                
+                area.addEventListener('dragover', (e) => {
+                    e.preventDefault();
+                    area.classList.add('dragover');
+                });
+
+                area.addEventListener('dragleave', () => {
+                    area.classList.remove('dragover');
+                });
+
+                area.addEventListener('drop', (e) => {
+                    e.preventDefault();
+                    area.classList.remove('dragover');
+                    if (e.dataTransfer.files.length > 0) {
+                        input.files = e.dataTransfer.files;
+                        fileNameDisplay.textContent = e.dataTransfer.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+
+                input.addEventListener('change', () => {
+                    if (input.files.length > 0) {
+                        fileNameDisplay.textContent = input.files[0].name;
+                        fileNameDisplay.style.display = 'block';
+                        handleFileChange(input);
+                    }
+                });
+            }
+
+            setupUploadArea(uploadArea1, fileInput1);
+            setupUploadArea(uploadArea2, fileInput2);
+
+            function handleFileChange(input) {
+                if (input === fileInput1) {
+                    file1 = input.files[0];
+                } else {
+                    file2 = input.files[0];
+                }
+            }
+        });
+
         async function calculateSDR() {
-            const referenceFile = document.getElementById('reference').files[0];
-            const estimatedFile = document.getElementById('estimated').files[0];
+            const file1 = document.getElementById('fileInput1').files[0];
+            const file2 = document.getElementById('fileInput2').files[0];
             
-            if (!referenceFile || !estimatedFile) {
+            if (!file1 || !file2) {
                 alert('请选择两个音频文件');
                 return;
             }
             
             const formData = new FormData();
-            formData.append('files', referenceFile);
-            formData.append('filesRef', estimatedFile);
+            formData.append('files', file1);
+            formData.append('filesRef', file2);
+            
+            const loading = document.getElementById('loading');
+            const results = document.getElementById('resultSection');
+            
+            loading.style.display = 'block';
+            results.style.display = 'none';
             
             try {
-                const response = await fetch('/api/SDR', {
+                const response = await fetch('/audio_param_calculate/SDR', {
                     method: 'POST',
                     body: formData
                 });
@@ -194,9 +210,10 @@
                 
                 const result = await response.text();
                 document.getElementById('resultValue').textContent = `SDR: ${result} dB`;
-                document.getElementById('resultSection').classList.add('active');
-                document.querySelector('.confirm-btn').style.display = 'block';
+                loading.style.display = 'none';
+                results.style.display = 'block';
             } catch (error) {
+                loading.style.display = 'none';
                 alert('计算过程中出现错误：' + error.message);
             }
         }

@@ -408,7 +408,7 @@ def get_SDR(files: UploadFile = File(...),
         filesRef: 参考音频文件
         
     Returns:
-        float: SDR值（dB）
+        str: SDR值（dB）
     """
     try:
         # 读取音频文件
@@ -419,8 +419,8 @@ def get_SDR(files: UploadFile = File(...),
         if sr1 != sr2:
             raise HTTPException(status_code=400, detail="采样率不一致")
             
-        # 计算SDR
-        sdr = compute_SDR(audio2, audio1)
+        # 计算SDR，注意转置处理
+        sdr = compute_SDR(audio2.T, audio1.T)
         
         return f"{sdr:.3f}"
         
