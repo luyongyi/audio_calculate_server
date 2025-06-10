@@ -1,5 +1,5 @@
 from fastapi import APIRouter, File, UploadFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from utils.safe_extract import FileExtractor
 import utils.waveform_analysis.wave_analyzer  as wave_analyzer
 import soundfile as sf
@@ -12,6 +12,11 @@ import zipfile
 import uuid
 import tempfile
 import shutil
+from utils.waveform_analysis.audio_comparison import (
+    calculate_rms_difference, 
+    plot_rms_difference,
+    AudioCompareParams
+)
 plt.switch_backend('Agg')
 router = APIRouter()
 
@@ -201,3 +206,148 @@ async def equalize_loudness(files: UploadFile = File(...),
                 zipf.write(file_path, arcname)
     
     return FileResponse(path=zip_path, filename="equalized_files.zip")
+
+@router.post("/compareDiff")
+async def compareDiff(files: UploadFile = File(...),
+                     type: str = "deg",
+                     compare_id: str = None):
+    """
+    比较两个音频文件的差异
+    
+    Args:
+        files: 上传的音频文件
+        type: 文件类型，"ref"表示参考文件，"deg"表示待比较文件
+        compare_id: 用于标识一组比较的唯一ID
+        
+    Returns:
+        JSONResponse: 包含比较结果的JSON响应
+    """
+    # 确保目录存在
+    base_dir = "files/compareDiff"
+    if not os.path.exists(base_dir):
+        os.makedirs(base_dir)
+    
+    # 处理参考文件
+    if type == "ref":
+        # 生成新的uuid
+        if not compare_id:
+            compare_id = str(uuid.uuid4())
+        
+        # 创建uuid对应的目录
+        ref_dir = os.path.join(base_dir, compare_id)
+        if not os.path.exists(ref_dir):
+            os.makedirs(ref_dir)
+        
+        # 保存参考文件
+        ref_path = os.path.join(ref_dir, "ref.wav")
+        with open(ref_path, "wb") as f:
+            f.write(await files.read())
+        
+        return JSONResponse(
+            content={
+                "message": "参考文件保存成功",
+                "uuid": compare_id,
+                "type": "ref",
+                "answer": "NA"
+            }
+        )
+    
+    # 处理待比较文件
+    elif type == "deg":
+        if not compare_id:
+            return JSONResponse(
+                status_code=400,
+                content={"error": "待比较文件需要提供uuid"}
+            )
+        
+        # 检查参考文件是否存在
+        ref_path = os.path.join(base_dir, compare_id, "ref.wav")
+        if not os.path.exists(ref_path):
+            return JSONResponse(
+                content={
+                    "message": "未找到对应的参考文件",
+                    "uuid": compare_id,
+                    "type": "deg",
+                    "answer": "NoRef"
+                }
+            )
+        
+        # 保存待比较文件
+        deg_dir = os.path.join(base_dir, compare_id)
+        deg_path = os.path.join(deg_dir, "deg.wav")
+        with open(deg_path, "wb") as f:
+            f.write(await files.read())
+        
+        try:
+            # 计算RMS差值
+            diff_result = calculate_rms_difference(ref_path, deg_path)
+            
+            # 生成差值图
+            plot_path = os.path.join(deg_dir, "diff_plot.png")
+            channel_type = 'stereo' if diff_result['channels']['ref'] == 2 else 'mono'
+            plot_rms_difference(diff_result, diff_result['fs'], plot_path, channel_type)
+            
+            # 判断结果
+            answer = "PASS"
+            if channel_type == 'mono':
+                if diff_result['mono']['max_diff_db'] > AudioCompareParams.MAX_DIFF_DB_THRESHOLD:
+                    answer = "FAIL"
+            else:
+                if diff_result['stereo']['left']['max_diff_db'] > AudioCompareParams.MAX_DIFF_DB_THRESHOLD or \
+                   diff_result['stereo']['right']['max_diff_db'] > AudioCompareParams.MAX_DIFF_DB_THRESHOLD:
+                    answer = "FAIL"
+            
+            # 准备返回结果
+            response_content = {
+                "message": "比较完成",
+                "uuid": compare_id,
+                "type": "deg",
+                "channels": diff_result['channels'],
+                "plot_path": plot_path,
+                "answer": answer,
+                "threshold": AudioCompareParams.MAX_DIFF_DB_THRESHOLD,
+                "window_params": diff_result['window_params']
+            }
+            
+            # 根据声道类型添加相应的差值数据
+            if channel_type == 'mono':
+                response_content.update({
+                    "mean_diff": diff_result['mono']['mean_diff'],
+                    "max_diff": diff_result['mono']['max_diff'],
+                    "max_diff_db": diff_result['mono']['max_diff_db'],
+                    "std_diff": diff_result['mono']['std_diff']
+                })
+            else:
+                response_content.update({
+                    "left_channel": {
+                        "mean_diff": diff_result['stereo']['left']['mean_diff'],
+                        "max_diff": diff_result['stereo']['left']['max_diff'],
+                        "max_diff_db": diff_result['stereo']['left']['max_diff_db'],
+                        "std_diff": diff_result['stereo']['left']['std_diff']
+                    },
+                    "right_channel": {
+                        "mean_diff": diff_result['stereo']['right']['mean_diff'],
+                        "max_diff": diff_result['stereo']['right']['max_diff'],
+                        "max_diff_db": diff_result['stereo']['right']['max_diff_db'],
+                        "std_diff": diff_result['stereo']['right']['std_diff']
+                    }
+                })
+            
+            return JSONResponse(content=response_content)
+            
+        except Exception as e:
+            return JSONResponse(
+                status_code=500,
+                content={
+                    "error": f"比较过程出错: {str(e)}",
+                    "uuid": compare_id,
+                    "type": "deg",
+                    "answer": "ERROR"
+                }
+            )
+    
+    else:
+        return JSONResponse(
+            status_code=400,
+            content={"error": "无效的type参数", "answer": "ERROR"}
+        )
